@@ -1,0 +1,362 @@
+---
+title: "448Assignment2"
+author: "Wenfeng Xu(49059105) & Junlin Jiang(79296358)"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1. 
+(a)
+
+```{r}
+# Load necessary libraries
+library(plotly)
+library(reshape2) # for melt function
+
+# Load the dataset
+load("Residen.RData")
+
+# Calculate the correlation matrix
+cor_matrix <- cor(Residen, use = "complete.obs")
+
+# Convert the matrix to a data frame for plotting
+cor_df <- melt(cor_matrix)
+
+# Create an interactive heatmap
+plot_ly(data = cor_df, x = ~Var1, y = ~Var2, z = ~value, type = "heatmap", colorscale = "RdBu") %>%
+  layout(title = "Correlation Heatmap",
+         xaxis = list(tickangle = 45),
+         yaxis = list(title = ""),
+         hovermode = "closest")
+
+```
+
+(b)
+```{r}
+# Load necessary library
+library(lmtest)
+
+# Load the dataset
+load("Residen.RData")
+
+# Fit the linear regression model
+model <- lm(V104 ~ . - V105, data = Residen)
+
+# Display the summary of the model
+summary_output <- summary(model)
+print(summary_output)
+
+```
+
+Explaination:
+The regression output provides insights into how well our model explains the variations in the "actual sales price" (V104) using other variables, excluding the "actual construction costs" (V105).
+
+From the Residuals section, we see that the differences between the observed and predicted sales prices range from a decrease of 901.15 to an increase of 645.31, with a median difference close to zero (-1.50). This suggests that our model's predictions are generally close to the actual values, with some exceptions.
+
+The Coefficients table gives us the relationship between each variable and the sales price. For instance, for every one-unit increase in the COMPLETION YEAR, the sales price increases by approximately 152.1 units. Variables marked with stars (like COMPLETION YEAR and COMPLETION QUARTER) are particularly significant in predicting the sales price. However, some variables are marked as NA, indicating potential issues like multicollinearity.
+
+Our model's overall fit is good. The Multiple R-squared value of 0.9879 suggests that our model explains about 98.79% of the variability in the sales price. The Adjusted R-squared further refines this to 98.48%, accounting for the number of predictors used.
+
+Lastly, the F-statistic is 321.9 with a very low p-value, indicating that our model is statistically significant and does a much better job of predicting sales price than a model with no predictors.
+
+In conclusion, this output tells us that our model is robust and does an excellent job of explaining the variations in the sales price using the given variables.
+
+
+(c)
+```{r}
+library(MASS)
+
+# Assuming the data is loaded as 'Residen'
+# Fit a linear regression model using backwards selection without displaying verbose output
+backward_model <- suppressWarnings(suppressMessages(step(lm(V104 ~ . - V105, data = Residen), direction = 'backward', trace = 0)))
+
+# Fit a linear regression model using stepwise selection
+stepwise_model <- step(lm(V104 ~ 1, data = Residen), scope = list(lower = ~1, upper = ~. - V105), direction = 'both')
+
+# Compare the models
+# Outputs
+backward_summary <- summary(backward_model)
+stepwise_summary <- summary(stepwise_model)
+
+# Computational Time (For simplicity, we'll use system.time() for a rough estimate)
+backward_time <- system.time(suppressWarnings(suppressMessages(step(lm(V104 ~ . - V105, data = Residen), direction = 'backward', trace = 0))))
+stepwise_time <- system.time(step(lm(V104 ~ 1, data = Residen), scope = list(lower = ~1, upper = ~. - V105), direction = 'both'))
+
+# Return the summaries and computational times for review
+list(backward_summary = backward_summary, stepwise_summary = stepwise_summary, backward_time = backward_time, stepwise_time = stepwise_time)
+```
+
+Backward Selection Model:
+Uses 19 predictors and explains a significant portion of the variance with an R-squared of 0.9869.
+Took about 10.727 seconds to compute.
+
+Stepwise Selection Model:
+Only includes the intercept, suggesting no predictors were significant.
+Computed almost instantly at 0.002 seconds.
+
+Summary:
+The backward model is more complex and fits the data well but took longer to compute. In contrast, the stepwise model is simplistic and quick but might not capture the data's nuances. The choice depends on the balance between accuracy and computational efficiency.
+
+(d)
+```{r}
+library(glmnet)
+
+# Prepare the data
+X <- as.matrix(Residen[, -c(104, 105)])  # Excluding V104 and V105 for predictors
+y <- Residen$V104
+
+# LASSO Regression
+lasso_model <- cv.glmnet(X, y, alpha = 1)
+best_lambda_lasso <- lasso_model$lambda.min
+lasso_coefficients <- coef(lasso_model, s = best_lambda_lasso)
+
+# Ridge Regression
+ridge_model <- cv.glmnet(X, y, alpha = 0)
+best_lambda_ridge <- ridge_model$lambda.min
+ridge_coefficients <- coef(ridge_model, s = best_lambda_ridge)
+
+# Return the coefficients for review
+list(lasso_coefficients = lasso_coefficients, ridge_coefficients = ridge_coefficients)
+```
+
+LASSO Regression Coefficients:
+Intercept: 40.4444
+V104: 0.9708
+All other predictors have coefficients of 0, indicating they've been excluded from the model.
+
+Ridge Regression Coefficients:
+Intercept: -374.3924
+START YEAR: 0.4609
+COMPLETION YEAR: 1.3689
+V104: 0.4643
+... (and so on for all other predictors)
+
+Comparison:
+LASSO has selected only the intercept and V104 as significant predictors.
+Ridge regression has included all the predictors with varying coefficients.
+In conclusion, LASSO provides a sparser model with fewer significant predictors, while Ridge includes all predictors with adjusted coefficients.
+
+2.  
+(a)
+```{r}
+# Set the RNG seed
+set.seed(12345)
+
+# Read the data
+data <- read.csv("parkinsons.csv", header = TRUE)
+
+# The outcome of interest is UPDRS
+y <- data$UPDRS
+
+# Drop the UPDRS column to get the model matrix X
+X <- data[,-ncol(data)]
+
+# Split the data
+train_index <- sample(1:nrow(data), 30)
+train_data <- data[train_index,]
+test_data <- data[-train_index,]
+
+# Splitting the model matrix and outcome
+X_train <- train_data[,-ncol(train_data)]
+y_train <- train_data$UPDRS
+
+X_test <- test_data[,-ncol(test_data)]
+y_test <- test_data$UPDRS
+
+# Standardize the training and test sets
+X_train <- scale(X_train)
+X_test <- scale(X_test)
+
+# Fit the linear model
+model <- lm(y_train ~ X_train)
+
+# Check the residuals
+residuals <- resid(model)
+
+# Check if the model fits the training data exactly by examining the residuals
+all(residuals == 0)
+
+
+```
+Why is this model not going to be useful?  
+The linear model might fit the training data exactly, especially if the number of predictors (features) is close to or greater than the number of observations. This leads to overfitting, while the model may fit the training data very well, it often performs poorly on unseen data.
+
+(b)
+```{r warning=FALSE}
+
+#Loading the required package
+
+library(glmnet)
+
+# Convert data to matrix form for glmnet
+X_train_matrix <- as.matrix(X_train)
+y_train_matrix <- as.matrix(y_train)
+X_test_matrix <- as.matrix(X_test)
+
+# Use LASSO regression with cross-validation
+cv.lasso <- cv.glmnet(X_train_matrix, y_train_matrix, alpha = 1, nfolds = 30, 
+                      lambda = 10^seq(3, -1, length=100), thresh = 1e-10)
+
+# Optimal value of lambda
+lambda_optimal <- cv.lasso$lambda.min
+print(paste("Optimal value of λ:", lambda_optimal))
+
+# Predict on test set using the optimal lambda
+predictions <- predict(cv.lasso, newx = X_test_matrix, s = lambda_optimal)
+
+# Calculate test error (Mean Squared Error in this case)
+test_error <- mean((y_test - predictions)^2)
+print(paste("Test error:", test_error))
+
+
+
+
+```
+(c)
+```{r}
+# Fit the LASSO model with the optimal lambda
+lasso.model <- glmnet(X_train_matrix, y_train_matrix, alpha = 1, lambda = lambda_optimal)
+
+# Extract the coefficients
+coefficients <- coef(lasso.model)
+
+# Print the coefficients
+print(coefficients)
+
+# Number of selected features (excluding intercept and features with coefficient equal to zero)
+num_features_selected <- sum(coefficients != 0) - 1
+print(paste("Number of features selected:", num_features_selected))
+
+
+
+```
+
+X97 seems to be the most predictive feature for UPDRS among all other features considered. The model assigns a non-zero coefficient to this feature, indicating its importance.  
+The LASSO regression has simplified the model dramatically by reducing the number of features to just one, making it much easier to interpret.  
+By using LASSO, we are also reducing the risk of overfitting, as it incorporates a penalty term that constrains the size of the coefficients. The absence of other features in the model suggests that adding more features won't likely improve the model's performance.  
+Since only one feature is selected, it can be assumed that this model will generalize well to new data, provided that the feature X97 is a strong and reliable predictor for UPDRS.
+
+(d)
+```{r warning=FALSE}
+# Set a different RNG seed
+set.seed(67890)
+
+# Randomly split the data again
+train_index_new <- sample(1:nrow(data), 30)
+train_data_new <- data[train_index_new,]
+test_data_new <- data[-train_index_new,]
+
+# Splitting the model matrix and outcome for the new split
+X_train_new <- train_data_new[,-ncol(train_data_new)]
+y_train_new <- train_data_new$UPDRS
+
+X_test_new <- test_data_new[,-ncol(test_data_new)]
+y_test_new <- test_data_new$UPDRS
+
+# Standardize the new training and test sets
+X_train_new <- scale(X_train_new)
+X_test_new <- scale(X_test_new)
+
+# Convert data to matrix form for glmnet (new split)
+X_train_matrix_new <- as.matrix(X_train_new)
+y_train_matrix_new <- as.matrix(y_train_new)
+X_test_matrix_new <- as.matrix(X_test_new)
+
+# Use LASSO regression with cross-validation on the new split
+cv.lasso_new <- cv.glmnet(X_train_matrix_new, y_train_matrix_new, alpha = 1, nfolds = 30, 
+                          lambda = 10^seq(3, -1, length=100), thresh = 1e-10)
+
+# Optimal value of lambda for the new split
+lambda_optimal_new <- cv.lasso_new$lambda.min
+print(paste("Optimal value of λ for the new split:", lambda_optimal_new))
+
+# Fit the LASSO model with the optimal lambda for the new split
+lasso.model_new <- glmnet(X_train_matrix_new, y_train_matrix_new, alpha = 1, lambda = lambda_optimal_new)
+
+# Extract the coefficients for the new split
+coefficients_new <- coef(lasso.model_new)
+
+# Print the coefficients for the new split
+print(coefficients_new)
+
+# Number of selected features (excluding intercept and features with coefficient equal to zero) for the new split
+num_features_selected_new <- sum(coefficients_new != 0) - 1
+print(paste("Number of features selected in the new split:", num_features_selected_new))
+
+
+
+```
+
+No, the same features have not been selected in the final model after the different random split. In the original split, only feature X97 was selected. In contrast, the new split selected six features: X9, X56, X83, X86, X94, and X97. This discrepancy suggests that the model's feature selection is sensitive to how the data is split into training and test sets, which may indicate a degree of instability or overfitting. 
+
+3.
+
+```{r}
+# Load necessary libraries
+library(glmnet)
+library(caret)
+
+# Load the dataset
+insurance_data <- read.csv("insurance.csv")
+
+# Convert categorical variables to dummy variables
+insurance_data <- model.matrix(charges ~ .-1, data=insurance_data)
+
+# Split the data into training and test sets (70% for training and 30% for testing)
+set.seed(123)
+train_indices <- sample(1:nrow(insurance_data), 0.7*nrow(insurance_data))
+X_train <- insurance_data[train_indices, -ncol(insurance_data)]
+y_train <- insurance_data[train_indices, ncol(insurance_data)]
+X_test <- insurance_data[-train_indices, -ncol(insurance_data)]
+y_test <- insurance_data[-train_indices, ncol(insurance_data)]
+
+# Standardize the data
+X_train <- scale(X_train)
+X_test <- scale(X_test)
+
+# Perform ElasticNet with cross-validation
+set.seed(123)
+cv.elasticnet <- cv.glmnet(X_train, y_train, alpha=0.5, nfolds=10)
+
+# Predict on the test set using lambda.min and lambda.1se
+predictions_min <- predict(cv.elasticnet, newx=X_test, s=cv.elasticnet$lambda.min)
+predictions_1se <- predict(cv.elasticnet, newx=X_test, s=cv.elasticnet$lambda.1se)
+
+# Calculate MSE and RMSE for both models
+mse_min <- mean((predictions_min - y_test)^2)
+mse_1se <- mean((predictions_1se - y_test)^2)
+rmse_min <- sqrt(mse_min)
+rmse_1se <- sqrt(mse_1se)
+
+# Number of predictors in each model
+num_pred_min <- sum(coef(cv.elasticnet, s=cv.elasticnet$lambda.min) != 0)
+num_pred_1se <- sum(coef(cv.elasticnet, s=cv.elasticnet$lambda.1se) != 0)
+
+# Print results
+cat("MSE lambda.min:", mse_min, "\n")
+cat("RMSE lambda.min:", rmse_min, "\n")
+cat("Number of predictors lambda.min:", num_pred_min, "\n")
+cat("MSE lambda.1se:", mse_1se, "\n")
+cat("RMSE lambda.1se:", rmse_1se, "\n")
+cat("Number of predictors lambda.1se:", num_pred_1se, "\n")
+
+# Plot cross-validation results
+plot(cv.elasticnet)
+
+
+
+
+
+
+
+
+```
+I would choose the model with lambda.min because it has a lower RMSE and MSE. This indicates that, on average, the predictions from the lambda.min model are closer to the true values.
